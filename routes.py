@@ -72,8 +72,12 @@ def init_routes(app):
             user = User(kakao_id=kakao_id, nickname=nickname)
             db.session.add(user)
             db.session.commit()
+            is_new_user = True
         else:
             user.nickname = nickname
             db.session.commit()
+            is_new_user = False
         
-        return jsonify({"message": "User logged in successfully", "user_id": user.id})
+        return jsonify({"message": "User logged in successfully", "user_id": user.id, "is_new_user": is_new_user})
+
+    # 아래에 다른 라우트들을 추가하세요...
