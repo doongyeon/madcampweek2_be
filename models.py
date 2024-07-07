@@ -40,6 +40,8 @@ class Post(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    total_views = db.Column(db.Integer, default=0)
+    today_views = db.Column(db.Integer, default=0)
 
     category = db.relationship('Category', backref=db.backref('posts', lazy=True))
 
@@ -49,7 +51,7 @@ class Reaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    content = db.Column(db.String(255), nullable=False)
+    reaction_type = db.Column(db.String(255), nullable=False)  # 'like', 'dislike' 등
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     post = db.relationship('Post', backref=db.backref('reactions', lazy=True))
@@ -61,7 +63,7 @@ class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    content = db.Column(db.Text, nullable=False)
+    comment_text = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

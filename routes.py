@@ -45,7 +45,7 @@ def init_routes(app):
         new_reaction = Reaction(
             post_id=data['post_id'],
             user_id=data['user_id'],
-            content=data['content']  # 좋아요, 싫어요 등
+            reaction_type=data['content']  # 'like', 'dislike' 등
         )
         db.session.add(new_reaction)
         db.session.commit()
@@ -57,7 +57,7 @@ def init_routes(app):
         new_comment = Comment(
             post_id=data['post_id'],
             user_id=data['user_id'],
-            content=data['content']
+            comment_text=data['content']
         )
         db.session.add(new_comment)
         db.session.commit()
@@ -100,6 +100,17 @@ def init_routes(app):
 
         db.session.commit()
         return jsonify({"message": "Interests saved successfully"})
+    
+    @app.route('/get_interests/<int:user_id>', methods=['GET'])
+    def get_interests(user_id):
+        user_categories = UserCategory.query.filter_by(user_id=user_id).all()
+        results = [
+            {
+                "id": user_category.category.id,
+                "category_name": user_category.category.category_name
+            } for user_category in user_categories]
+
+        return jsonify(results)
 
     @app.route('/edit_post/<int:post_id>', methods=['PUT'])
     def edit_post(post_id):
@@ -114,3 +125,86 @@ def init_routes(app):
         post.category_id = data.get('category_id', post.category_id)
         db.session.commit()
         return jsonify({"message": "Post updated successfully", "post_id": post.id})
+
+    @app.route('/liked_posts/<int:user_id>', methods=['GET'])
+    def liked_posts(user_id):
+        liked_post_ids = db.session.query(Reaction.post_id).filter(Reaction.user_id == user_id, Reaction.reaction_type == 'like').all()
+        liked_post_ids = [post_id[0] for post_id in liked_post_ids]
+        return jsonify(liked_post_ids)
+    
+    @app.route('/comments/<int:post_id>', methods=['GET'])
+    def get_comments(post_id):
+        comments = Comment.query.filter_by(post_id=post_id).all()
+        results = [
+            {
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "user_id": comment.user_id,
+                "comment_text": comment.comment_text,
+                "created_at": comment.created_at,
+                "updated_at": comment.updated_at
+            } for comment in comments]
+        return jsonify(results)
+    
+    @app.route('/reactions/<int:post_id>', methods=['GET'])
+    def get_reactions(post_id):
+        likes_count = Reaction.query.filter_by(post_id=post_id, reaction_type='like').count()
+        dislikes_count = Reaction.query.filter_by(post_id=post_id, reaction_type='dislike').count()
+
+        result = {
+            "post_id": post_id,
+            "likes": likes_count,
+            "dislikes": dislikes_count
+        }
+
+        return jsonify(result)
+    
+    @app.route('/remove_reaction', methods=['POST'])
+    def remove_reaction():
+        data = request.get_json()
+        post_id = data['post_id']
+        user_id = data['user_id']
+        reaction_type = data['content']  # 'like', 'dislike' 등
+
+        reaction = Reaction.query.filter_by(post_id=post_id, user_id=user_id, reaction_type=reaction_type).first()
+        
+        if reaction:
+            db.session.delete(reaction)
+            db.session.commit()
+            return jsonify({"message": "Reaction removed successfully"})
+        else:
+            return jsonify({"message": "Reaction not found"}), 404
+
+    @app.route('/post/<int:post_id>/view', methods=['GET'])
+    def increment_post_views(post_id):
+        post = Post.query.get(post_id)
+        if post is None:
+            return jsonify({"error": "Post not found"}), 404
+
+        # total_views와 today_views를 증가시킵니다.
+        post.total_views += 1
+        post.today_views += 1
+
+        db.session.commit()
+
+        return '', 204  # No Content 응답
+
+    @app.route('/posts/<int:post_id>', methods=['GET'])
+    def get_post(post_id):
+        post = Post.query.get(post_id)
+        if post is None:
+            return jsonify({"error": "Post not found"}), 404
+
+        result = {
+            "id": post.id,
+            "title": post.title,
+            "image": post.image,
+            "content": post.content,
+            "category_id": post.category_id,
+            "created_at": post.created_at,
+            "updated_at": post.updated_at,
+            "total_views": post.total_views,
+            "today_views": post.today_views
+        }
+
+        return jsonify(result)

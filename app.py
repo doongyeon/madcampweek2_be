@@ -3,6 +3,7 @@ from config import Config
 from models import db
 from routes import init_routes
 from flask_cors import CORS
+import scheduler
 
 app = Flask(__name__)
 app.config.from_object(Config)
