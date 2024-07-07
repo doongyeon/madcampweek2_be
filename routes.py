@@ -1,11 +1,11 @@
 from flask import request, jsonify
-from models import db, Category, Post, Reaction, Comment, User
+from models import db, Category, Post, Reaction, Comment, User, UserCategory
 
 def init_routes(app):
     @app.route('/create_category', methods=['POST'])
     def create_category():
         data = request.get_json()
-        new_category = Category(name=data['name'])
+        new_category = Category(category_name=data['name'])
         db.session.add(new_category)
         db.session.commit()
         return jsonify({"message": "Category created successfully", "category_id": new_category.id})
@@ -15,7 +15,8 @@ def init_routes(app):
         data = request.get_json()
         new_post = Post(
             title=data['title'],
-            image_url=data['image_url'],
+            image=data['image'],
+            content=data['content'],
             category_id=data['category_id']
         )
         db.session.add(new_post)
@@ -29,7 +30,8 @@ def init_routes(app):
             {
                 "id": post.id,
                 "title": post.title,
-                "image_url": post.image_url,
+                "image": post.image,
+                "content": post.content,
                 "category": post.category_id,
                 "created_at": post.created_at,
                 "updated_at": post.updated_at
@@ -80,4 +82,35 @@ def init_routes(app):
         
         return jsonify({"message": "User logged in successfully", "user_id": user.id, "is_new_user": is_new_user})
 
-    # 아래에 다른 라우트들을 추가하세요...
+    @app.route('/save_interests', methods=['POST'])
+    def save_interests():
+        data = request.get_json()
+        user_id = data['user_id']
+        interests = data['interests']
+
+        # 사용자의 기존 관심 카테고리를 삭제합니다.
+        UserCategory.query.filter_by(user_id=user_id).delete()
+
+        # 새로운 관심 카테고리를 저장합니다.
+        for interest in interests:
+            category = Category.query.filter_by(category_name=interest).first()
+            if category:
+                new_user_category = UserCategory(user_id=user_id, category_id=category.id)
+                db.session.add(new_user_category)
+
+        db.session.commit()
+        return jsonify({"message": "Interests saved successfully"})
+
+    @app.route('/edit_post/<int:post_id>', methods=['PUT'])
+    def edit_post(post_id):
+        data = request.get_json()
+        post = Post.query.get(post_id)
+        if post is None:
+            return jsonify({"error": "Post not found"}), 404
+        
+        post.title = data.get('title', post.title)
+        post.image = data.get('image', post.image)
+        post.content = data.get('content', post.content)
+        post.category_id = data.get('category_id', post.category_id)
+        db.session.commit()
+        return jsonify({"message": "Post updated successfully", "post_id": post.id})
