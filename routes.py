@@ -1,6 +1,34 @@
 from flask import request, jsonify
 from models import db, Category, Post, Reaction, Comment, User, UserCategory
 
+# S3 버킷 설정
+S3_BUCKET = 'your-bucket-name'
+S3_KEY = 'your-aws-access-key'
+S3_SECRET = 'your-aws-secret-key'
+S3_LOCATION = f'http://{S3_BUCKET}.s3.amazonaws.com/'
+
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=S3_KEY,
+    aws_secret_access_key=S3_SECRET
+)
+
+def upload_file_to_s3(file, bucket_name, acl="public-read"):
+    try:
+        s3.upload_fileobj(
+            file,
+            bucket_name,
+            file.filename,
+            ExtraArgs={
+                "ACL": acl,
+                "ContentType": file.content_type
+            }
+        )
+    except Exception as e:
+        print("Something Happened: ", e)
+        return e
+    return f"{S3_LOCATION}{file.filename}"
+
 def init_routes(app):
     @app.route('/create_category', methods=['POST'])
     def create_category():
@@ -12,12 +40,23 @@ def init_routes(app):
 
     @app.route('/create_post', methods=['POST'])
     def create_post():
-        data = request.get_json()
+        data = request.form
+        title = data['title']
+        content = data['content']
+        category_id = data['category_id']
+        image_url = None
+
+        if 'image' in request.files:
+            image = request.files['image']
+            image_url = upload_file_to_s3(image, S3_BUCKET)
+        elif 'image_url' in data:
+            image_url = data['image_url']
+
         new_post = Post(
-            title=data['title'],
-            image=data['image'],
-            content=data['content'],
-            category_id=data['category_id']
+            title=title,
+            image=image_url,
+            content=content,
+            category_id=category_id
         )
         db.session.add(new_post)
         db.session.commit()
@@ -33,6 +72,7 @@ def init_routes(app):
                 "image": post.image,
                 "content": post.content,
                 "category": post.category_id,
+                "today_views": post.today_views,
                 "created_at": post.created_at,
                 "updated_at": post.updated_at
             } for post in posts]
@@ -128,9 +168,26 @@ def init_routes(app):
 
     @app.route('/liked_posts/<int:user_id>', methods=['GET'])
     def liked_posts(user_id):
-        liked_post_ids = db.session.query(Reaction.post_id).filter(Reaction.user_id == user_id, Reaction.reaction_type == 'like').all()
+        liked_post_ids = db.session.query(Reaction.post_id).filter(
+            Reaction.user_id == user_id, Reaction.reaction_type == 'like'
+        ).all()
         liked_post_ids = [post_id[0] for post_id in liked_post_ids]
-        return jsonify(liked_post_ids)
+        
+        liked_posts = Post.query.filter(Post.id.in_(liked_post_ids)).all()
+        results = [
+            {
+                "id": post.id,
+                "title": post.title,
+                "content": post.content,
+                "image": post.image,
+                "category_id": post.category_id,
+                "created_at": post.created_at,
+                "updated_at": post.updated_at,
+                "today_views": post.today_views,
+            } for post in liked_posts
+        ]
+
+        return jsonify(results)
     
     @app.route('/comments/<int:post_id>', methods=['GET'])
     def get_comments(post_id):
@@ -146,15 +203,19 @@ def init_routes(app):
             } for comment in comments]
         return jsonify(results)
     
-    @app.route('/reactions/<int:post_id>', methods=['GET'])
-    def get_reactions(post_id):
+    @app.route('/reactions/<int:post_id>/<int:user_id>', methods=['GET'])
+    def get_reactions(post_id, user_id):
         likes_count = Reaction.query.filter_by(post_id=post_id, reaction_type='like').count()
         dislikes_count = Reaction.query.filter_by(post_id=post_id, reaction_type='dislike').count()
+        
+        user_reaction = Reaction.query.filter_by(post_id=post_id, user_id=user_id).first()
+        user_reaction_type = user_reaction.reaction_type if user_reaction else None
 
         result = {
             "post_id": post_id,
             "likes": likes_count,
-            "dislikes": dislikes_count
+            "dislikes": dislikes_count,
+            "user_reaction": user_reaction_type
         }
 
         return jsonify(result)
@@ -208,3 +269,5 @@ def init_routes(app):
         }
 
         return jsonify(result)
+
+    

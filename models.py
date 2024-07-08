@@ -35,7 +35,7 @@ class Post(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
-    image = db.Column(db.String(255))
+    image = db.Column(db.String(255), nullable=True)
     content = db.Column(db.Text, nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
