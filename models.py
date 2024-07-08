@@ -40,8 +40,8 @@ class Post(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    total_views = db.Column(db.Integer, default=0)
-    today_views = db.Column(db.Integer, default=0)
+    total_views = db.Column(db.Integer, nullable=False, default=0)
+    today_views = db.Column(db.Integer, nullable=False, default=0)
 
     category = db.relationship('Category', backref=db.backref('posts', lazy=True))
 

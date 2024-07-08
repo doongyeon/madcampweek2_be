@@ -1,5 +1,36 @@
 from flask import request, jsonify
 from models import db, Category, Post, Reaction, Comment, User, UserCategory
+import boto3
+from config import Config
+
+# S3 버킷 설정
+S3_BUCKET = Config.S3_BUCKET
+S3_KEY = Config.S3_KEY
+S3_SECRET = Config.S3_SECRET
+S3_LOCATION = Config.S3_LOCATION
+
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=S3_KEY,
+    aws_secret_access_key=S3_SECRET
+)
+
+def upload_file_to_s3(file, bucket_name, acl="public-read"):
+    try:
+        s3.upload_fileobj(
+            file,
+            bucket_name,
+            file.filename,
+            ExtraArgs={
+                "ACL": acl,
+                "ContentType": file.content_type
+            }
+        )
+        print(f"File uploaded to S3: {file.filename}")
+        return f"{S3_LOCATION}{file.filename}"
+    except Exception as e:
+        print(f"Something Happened: {e}")
+        return None
 
 def init_routes(app):
     @app.route('/create_category', methods=['POST'])
@@ -12,12 +43,23 @@ def init_routes(app):
 
     @app.route('/create_post', methods=['POST'])
     def create_post():
-        data = request.get_json()
+        data = request.form
+        title = data['title']
+        content = data['content']
+        category_id = data['category_id']
+        image_url = None
+
+        if 'image' in request.files:
+            image = request.files['image']
+            image_url = upload_file_to_s3(image, S3_BUCKET)
+        elif 'image_url' in data:
+            image_url = data['image_url']
+
         new_post = Post(
-            title=data['title'],
-            image=data['image'],
-            content=data['content'],
-            category_id=data['category_id']
+            title=title,
+            image=image_url,
+            content=content,
+            category_id=category_id
         )
         db.session.add(new_post)
         db.session.commit()
@@ -115,17 +157,50 @@ def init_routes(app):
 
     @app.route('/edit_post/<int:post_id>', methods=['PUT'])
     def edit_post(post_id):
-        data = request.get_json()
+        data = request.form
         post = Post.query.get(post_id)
         if post is None:
             return jsonify({"error": "Post not found"}), 404
-        
+
         post.title = data.get('title', post.title)
-        post.image = data.get('image', post.image)
         post.content = data.get('content', post.content)
-        post.category_id = data.get('category_id', post.category_id)
-        db.session.commit()
-        return jsonify({"message": "Post updated successfully", "post_id": post.id})
+
+        print(f"Received data: {data}")
+
+        if 'image' in request.files:
+            image = request.files['image']
+            print(f"Received image: {image.filename}")
+            image_url = upload_file_to_s3(image, S3_BUCKET)
+            if image_url:
+                post.image = image_url
+            else:
+                return jsonify({"error": "Failed to upload image"}), 500
+        elif 'image_url' in data:
+            post.image = data['image_url']
+
+        post.total_views = post.total_views or 0
+        post.today_views = post.today_views or 0
+
+        try:
+            db.session.commit()
+        except Exception as e:
+            print(f"Error committing to database: {e}")
+            return jsonify({"error": "Failed to update post in database"}), 500
+
+        response = {
+            "id": post.id,
+            "title": post.title,
+            "content": post.content,
+            "image": post.image,
+            "category_id": post.category_id,
+            "total_views": post.total_views,
+            "today_views": post.today_views,
+            "created_at": post.created_at,
+            "updated_at": post.updated_at
+        }
+
+        return jsonify(response)
+
 
     @app.route('/liked_posts/<int:user_id>', methods=['GET'])
     def liked_posts(user_id):
