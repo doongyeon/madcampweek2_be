@@ -1,34 +1,6 @@
 from flask import request, jsonify
 from models import db, Category, Post, Reaction, Comment, User, UserCategory
 
-# S3 버킷 설정
-S3_BUCKET = 'your-bucket-name'
-S3_KEY = 'your-aws-access-key'
-S3_SECRET = 'your-aws-secret-key'
-S3_LOCATION = f'http://{S3_BUCKET}.s3.amazonaws.com/'
-
-s3 = boto3.client(
-    's3',
-    aws_access_key_id=S3_KEY,
-    aws_secret_access_key=S3_SECRET
-)
-
-def upload_file_to_s3(file, bucket_name, acl="public-read"):
-    try:
-        s3.upload_fileobj(
-            file,
-            bucket_name,
-            file.filename,
-            ExtraArgs={
-                "ACL": acl,
-                "ContentType": file.content_type
-            }
-        )
-    except Exception as e:
-        print("Something Happened: ", e)
-        return e
-    return f"{S3_LOCATION}{file.filename}"
-
 def init_routes(app):
     @app.route('/create_category', methods=['POST'])
     def create_category():
@@ -40,23 +12,12 @@ def init_routes(app):
 
     @app.route('/create_post', methods=['POST'])
     def create_post():
-        data = request.form
-        title = data['title']
-        content = data['content']
-        category_id = data['category_id']
-        image_url = None
-
-        if 'image' in request.files:
-            image = request.files['image']
-            image_url = upload_file_to_s3(image, S3_BUCKET)
-        elif 'image_url' in data:
-            image_url = data['image_url']
-
+        data = request.get_json()
         new_post = Post(
-            title=title,
-            image=image_url,
-            content=content,
-            category_id=category_id
+            title=data['title'],
+            image=data['image'],
+            content=data['content'],
+            category_id=data['category_id']
         )
         db.session.add(new_post)
         db.session.commit()
