@@ -1,7 +1,9 @@
 from flask import request, jsonify
-from models import db, Category, Post, Reaction, Comment, User, UserCategory
+from models import db, Category, Post, Reaction, Comment, User, UserCategory, Report
 import boto3
 from config import Config
+from datetime import datetime, timezone
+
 
 # S3 버킷 설정
 S3_BUCKET = Config.S3_BUCKET
@@ -74,7 +76,7 @@ def init_routes(app):
                 "title": post.title,
                 "image": post.image,
                 "content": post.content,
-                "category": post.category_id,
+                "category_id": post.category_id,
                 "today_views": post.today_views,
                 "created_at": post.created_at,
                 "updated_at": post.updated_at
@@ -155,6 +157,8 @@ def init_routes(app):
 
         return jsonify(results)
 
+    from datetime import datetime
+
     @app.route('/edit_post/<int:post_id>', methods=['PUT'])
     def edit_post(post_id):
         data = request.form
@@ -180,6 +184,9 @@ def init_routes(app):
 
         post.total_views = post.total_views or 0
         post.today_views = post.today_views or 0
+
+        # 명시적으로 updated_at 필드를 현재 GMT 시간으로 설정합니다.
+        post.updated_at = datetime.now(timezone.utc)
 
         try:
             db.session.commit()
@@ -305,5 +312,41 @@ def init_routes(app):
         }
 
         return jsonify(result)
-
     
+    @app.route('/report_post', methods=['POST'])
+    def report_post():
+        data = request.get_json()
+        new_report = Report(
+            post_id=data['post_id'],
+            user_id=data['user_id'],
+            report_reason=data['report_reason']
+        )
+        db.session.add(new_report)
+        db.session.commit()
+        return jsonify({"message": "Report submitted successfully"})
+
+    @app.route('/reported_posts', methods=['GET'])
+    def get_reported_posts():
+        reports = Report.query.all()
+        results = [
+            {
+                "report_id": report.id,
+                "post_id": report.post_id,
+                "user_id": report.user_id,
+                "report_reason": report.report_reason,
+                "report_date": report.report_date
+            } for report in reports]
+
+        return jsonify(results)
+    
+    @app.route('/delete_comment', methods=['DELETE'])
+    def delete_comment():
+        data = request.get_json()
+        comment_id = data['comment_id']
+        comment = Comment.query.get(comment_id)
+        if comment is None:
+            return jsonify({"error": "Comment not found"}), 404
+
+        db.session.delete(comment)
+        db.session.commit()
+        return jsonify({"message": "Comment deleted successfully"})

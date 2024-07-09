@@ -39,7 +39,7 @@ class Post(db.Model):
     content = db.Column(db.Text, nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     total_views = db.Column(db.Integer, nullable=False, default=0)
     today_views = db.Column(db.Integer, nullable=False, default=0)
 
@@ -69,3 +69,15 @@ class Comment(db.Model):
 
     post = db.relationship('Post', backref=db.backref('comments', lazy=True))
     user = db.relationship('User', backref=db.backref('comments', lazy=True))
+
+class Report(db.Model):
+    __tablename__ = 'reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    report_reason = db.Column(db.String(255), nullable=False)
+    report_date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    post = db.relationship('Post', backref=db.backref('reports', lazy=True))
+    user = db.relationship('User', backref=db.backref('reports', lazy=True))
